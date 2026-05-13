@@ -31,21 +31,3 @@ Expected result: a tester can choose two campus places and get a usable walking 
 React owns the current start, destination, and route option. When those values change, the app sends the selected coordinates to Valhalla's pedestrian routing endpoint and stores the returned distance, duration, route shape, and directions. Leaflet then draws that shape on top of OpenStreetMap.
 
 More detail is in [docs/architecture.md](docs/architecture.md).
-
-## Local Development
-
-```bash
-npm install
-npm run dev
-```
-
-## Checks
-
-```bash
-npm run lint
-npm run build
-```
-
-## Deployment
-
-The repository includes a GitHub Pages workflow. Pushes to `main` build the Vite app and publish the `dist` output.
