@@ -59,3 +59,72 @@
   color: #1f1730;
   background: var(--uw-gold);
 }
+
+.hp-map-marker.report {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.hp-report-dot {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #e53935;
+}
+
+.hp-map-marker.report.stairs .hp-report-dot {
+  background: #d64b2a;
+}
+
+.hp-map-marker.report.construction .hp-report-dot {
+  background: #8b6f19;
+}
+
+.hp-map-marker.report.hazard .hp-report-dot {
+  background: #c6285d;
+}
+
+.hp-map-marker.report.pending .hp-report-dot {
+  background: #4b2e83;
+}
+
+.hp-map-marker.stair-warning {
+  border-color: #fff;
+  border-radius: 9px;
+  background: #bd4a24;
+  box-shadow: 0 8px 18px rgba(70, 43, 26, 0.28);
+}
+
+.hp-stair-icon {
+  display: block;
+  width: 29px;
+  height: 29px;
+  overflow: visible;
+}
+
+.hp-stair-steps {
+  fill: #fff;
+}
+
+.hp-stair-icon circle:first-of-type {
+  fill: #fff;
+  stroke: #bd4a24;
+  stroke-width: 1.5;
+}
+
+.hp-stair-alert {
+  fill: none;
+  stroke: #bd4a24;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.hp-stair-alert-dot {
+  fill: #bd4a24;
+}
+
+.hp-report-dot {
+  filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px rgba(0,0,0,0.3));
+}

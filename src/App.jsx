@@ -4,33 +4,80 @@ import 'leaflet/dist/leaflet.css'
 import { AppHeader } from './components/AppHeader'
 import { BuildingDetails } from './components/BuildingDetails'
 import { CampusMap } from './components/CampusMap'
+import { MvpHub } from './components/MvpHub'
 import { NavigationCard } from './components/NavigationCard'
+import { ReportForm } from './components/ReportForm'
 import { RouteAlert } from './components/RouteAlert'
 import { RoutePanel } from './components/RoutePanel'
+import { getReportType } from './data/reportTypes'
 import { places } from './data/places'
 import { routeOptions } from './data/routeOptions'
-import { getMarkerIcon } from './utils/mapMarkers'
+import { stairWarnings } from './data/stairWarnings'
+import { getMarkerIcon, getReportIcon, getStairIcon } from './utils/mapMarkers'
 import { buildFallbackRoute, getValhallaRoute } from './utils/routing'
 import './App.css'
+
+const reportStorageKey = 'huskypath-report-submissions'
+
+const getRouteFitOptions = (animate = false) => {
+  if (typeof window === 'undefined' || window.innerWidth <= 980) {
+    return {
+      animate,
+      maxZoom: 17,
+      padding: [26, 26],
+    }
+  }
+
+  return {
+    animate,
+    maxZoom: 17,
+    paddingTopLeft: [420, 132],
+    paddingBottomRight: [380, 168],
+  }
+}
+
+const readStoredReports = () => {
+  if (typeof window === 'undefined') {
+    return []
+  }
+
+  try {
+    const storedReports = window.localStorage.getItem(reportStorageKey)
+    return storedReports ? JSON.parse(storedReports) : []
+  } catch {
+    return []
+  }
+}
 
 function App() {
   const mapRef = useRef(null)
   const mapInstanceRef = useRef(null)
   const markerLayerRef = useRef(null)
   const routeLayerRef = useRef(null)
+  const reportsLayerRef = useRef(null)
+  const stairLayerRef = useRef(null)
+  const [activeView, setActiveView] = useState('mvp')
   const [startId, setStartId] = useState('red-square')
   const [destinationId, setDestinationId] = useState('mgh')
   const [routeId, setRouteId] = useState('accessible')
   const [clockStart] = useState(() => Date.now())
   const [preferences, setPreferences] = useState({
     avoidStairs: true,
+    allowStairs: false,
     preferCovered: false,
   })
+
+  // Pin-drop state
+  const [reports, setReports] = useState(readStoredReports)
+  const [pendingPin, setPendingPin] = useState(null)
+  const [pendingType, setPendingType] = useState('stairs')
+  const [pendingNote, setPendingNote] = useState('')
 
   const startLocation = useMemo(
     () => places.find((place) => place.id === startId),
     [startId],
   )
+
   const selectedBuilding = useMemo(
     () => places.find((place) => place.id === destinationId),
     [destinationId],
@@ -55,6 +102,10 @@ function App() {
   )
 
   useEffect(() => {
+    window.localStorage.setItem(reportStorageKey, JSON.stringify(reports))
+  }, [reports])
+
+  useEffect(() => {
     if (!startLocation || !selectedBuilding || !selectedRoute) {
       return undefined
     }
@@ -64,7 +115,9 @@ function App() {
       selectedBuilding,
       selectedRoute,
     )
+
     const controller = new AbortController()
+
     const loadingTimer = window.setTimeout(() => {
       setRouteData({
         ...fallbackRoute,
@@ -82,7 +135,9 @@ function App() {
       .then((route) => {
         setRouteData(route)
       })
-      .catch(() => {
+      .catch((error) => {
+        console.error('Routing API failed:', error)
+
         if (!controller.signal.aborted) {
           setRouteData(fallbackRoute)
         }
@@ -114,7 +169,15 @@ function App() {
 
     markerLayerRef.current = L.layerGroup().addTo(map)
     routeLayerRef.current = L.layerGroup().addTo(map)
+    reportsLayerRef.current = L.layerGroup().addTo(map)
+    stairLayerRef.current = L.layerGroup().addTo(map)
     mapInstanceRef.current = map
+
+    map.on('click', (e) => {
+      setPendingPin((currentPin) =>
+        currentPin ?? { latLng: [e.latlng.lat, e.latlng.lng] },
+      )
+    })
 
     window.setTimeout(() => {
       map.invalidateSize()
@@ -125,7 +188,32 @@ function App() {
       mapInstanceRef.current = null
       markerLayerRef.current = null
       routeLayerRef.current = null
+      reportsLayerRef.current = null
+      stairLayerRef.current = null
     }
+  }, [])
+
+  useEffect(() => {
+    const layer = stairLayerRef.current
+
+    if (!layer) {
+      return
+    }
+
+    layer.clearLayers()
+
+    stairWarnings.forEach((warning) => {
+      L.marker(warning.latLng, {
+        icon: getStairIcon(),
+        bubblingMouseEvents: false,
+        keyboard: true,
+        title: warning.label,
+      })
+        .bindTooltip(`${warning.label}: ${warning.description}`, {
+          direction: 'top',
+        })
+        .addTo(layer)
+    })
   }, [])
 
   useEffect(() => {
@@ -133,7 +221,7 @@ function App() {
     const markerLayer = markerLayerRef.current
     const routeLayer = routeLayerRef.current
 
-    if (!map || !markerLayer || !routeLayer) {
+    if (!map || !markerLayer || !routeLayer || !startLocation || !selectedBuilding) {
       return
     }
 
@@ -162,6 +250,7 @@ function App() {
           place.id === startLocation.id ? 'Start' : place.shortName,
           markerType,
         ),
+        bubblingMouseEvents: false,
         keyboard: true,
         title: place.name,
       })
@@ -182,11 +271,53 @@ function App() {
         ? routeData.path
         : [startLocation.latLng, selectedBuilding.latLng],
     )
-    map.fitBounds(bounds.pad(0.45), {
-      animate: false,
-      maxZoom: 17,
-    })
+
+    map.fitBounds(bounds.pad(0.12), getRouteFitOptions(false))
   }, [routeData.path, selectedRoute.id, startLocation, selectedBuilding])
+
+  // Temporary marker for pending pin
+  useEffect(() => {
+    const map = mapInstanceRef.current
+    if (!map || !pendingPin) return
+
+    const tempMarker = L.marker(pendingPin.latLng, {
+      // small dot instead of labeled marker
+      icon: getReportIcon('pending'),
+    }).addTo(map)
+
+    return () => {
+      map.removeLayer(tempMarker)
+    }
+  }, [pendingPin])
+
+  // Render approved reports
+  useEffect(() => {
+    const layer = reportsLayerRef.current
+    if (!layer) return
+
+    layer.clearLayers()
+
+    reports.forEach((report) => {
+      if (report.status !== 'approved') return
+
+      L.marker(report.latLng, {
+        icon: getReportIcon(report.type),
+        title: getReportType(report.type).label,
+      })
+        .bindTooltip(report.note || getReportType(report.type).description, {
+          direction: 'top',
+        })
+        .addTo(layer)
+    })
+  }, [reports])
+
+  useEffect(() => {
+    if (activeView === 'map' && mapInstanceRef.current) {
+      window.setTimeout(() => {
+        mapInstanceRef.current?.invalidateSize()
+      }, 0)
+    }
+  }, [activeView])
 
   const handleStartChange = (event) => {
     const nextStartId = event.target.value
@@ -214,7 +345,7 @@ function App() {
   const focusRouteOnMap = () => {
     const map = mapInstanceRef.current
 
-    if (!map) {
+    if (!map || !startLocation || !selectedBuilding) {
       return
     }
 
@@ -224,10 +355,7 @@ function App() {
         : [startLocation.latLng, selectedBuilding.latLng],
     )
 
-    map.fitBounds(bounds.pad(0.45), {
-      animate: true,
-      maxZoom: 17,
-    })
+    map.fitBounds(bounds.pad(0.12), getRouteFitOptions(true))
   }
 
   const arrivalTime = useMemo(
@@ -238,23 +366,93 @@ function App() {
       }).format(new Date(clockStart + routeData.duration * 60000)),
     [clockStart, routeData.duration],
   )
+
   const primaryStep =
-    routeData.steps[0] ?? `Head toward ${selectedBuilding.name}.`
+    routeData.steps[0] ?? `Head toward ${selectedBuilding?.name ?? 'destination'}.`
+  const routeAnnouncement =
+    routeData.status === 'loading'
+      ? `Checking route from ${startLocation.name} to ${selectedBuilding.name}.`
+      : `${selectedRoute.label} route from ${startLocation.name} to ${selectedBuilding.name}: ${routeData.duration} minutes, ${routeData.distance}. ${routeData.source}`
+
+  const cancelReport = () => {
+    setPendingPin(null)
+    setPendingType('stairs')
+    setPendingNote('')
+  }
+
+  const submitReport = () => {
+    if (!pendingPin) return
+
+    const newReport = {
+      id: Date.now(),
+      createdAt: new Date().toISOString(),
+      latLng: pendingPin.latLng,
+      note: pendingNote.trim(),
+      type: pendingType,
+      status: 'pending',
+    }
+
+    setReports((prev) => [...prev, newReport])
+    cancelReport()
+    setActiveView('mvp')
+  }
+
+  const approveReport = (reportId) => {
+    setReports((currentReports) =>
+      currentReports.map((report) =>
+        report.id === reportId ? { ...report, status: 'approved' } : report,
+      ),
+    )
+  }
+
+  const dismissReport = (reportId) => {
+    setReports((currentReports) =>
+      currentReports.map((report) =>
+        report.id === reportId ? { ...report, status: 'dismissed' } : report,
+      ),
+    )
+  }
 
   return (
     <main className="app-shell">
+      <a
+        className="skip-link"
+        href={activeView === 'map' ? '#route-title' : '#mvp-title'}
+      >
+        Skip to current content
+      </a>
+      <p className="sr-only" role="status" aria-live="polite">
+        {routeAnnouncement}
+      </p>
+
       <AppHeader
+        activeView={activeView}
         destinationId={destinationId}
         handleDestinationChange={handleDestinationChange}
         places={places}
+        setActiveView={setActiveView}
         startId={startId}
       />
 
-      <section className="map-stage" aria-labelledby="route-title">
+      <section
+        className="map-stage"
+        aria-labelledby="route-title"
+        hidden={activeView !== 'map'}
+      >
         <CampusMap
           ref={mapRef}
           selectedBuilding={selectedBuilding}
           startLocation={startLocation}
+        />
+
+        <ReportForm
+          cancelReport={cancelReport}
+          pendingNote={pendingNote}
+          pendingPin={pendingPin}
+          pendingType={pendingType}
+          setPendingNote={setPendingNote}
+          setPendingType={setPendingType}
+          submitReport={submitReport}
         />
 
         <RoutePanel
@@ -284,6 +482,14 @@ function App() {
           selectedBuilding={selectedBuilding}
         />
       </section>
+
+      {activeView === 'mvp' && (
+        <MvpHub
+          approveReport={approveReport}
+          dismissReport={dismissReport}
+          reports={reports}
+        />
+      )}
     </main>
   )
 }

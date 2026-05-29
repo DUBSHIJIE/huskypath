@@ -4,6 +4,7 @@ export const routeOptions = [
     label: 'Fastest',
     detail: 'Best when you have a short class transition.',
     tags: ['Direct', 'Fastest walk'],
+    orsProfile: 'foot-walking',
     costingOptions: {
       walking_speed: 5.1,
     },
@@ -13,6 +14,7 @@ export const routeOptions = [
     label: 'Accessible',
     detail: 'Penalizes stairs and steep routes when pedestrian data allows it.',
     tags: ['Stair penalty', 'Lower hills'],
+    orsProfile: 'wheelchair',
     costingOptions: {
       step_penalty: 900,
       use_hills: 0,
@@ -24,11 +26,24 @@ export const routeOptions = [
     label: 'Simplest',
     detail: 'Prefers main walkways and avoids sketchier shortcuts.',
     tags: ['Main paths', 'Paved'],
+    orsProfile: 'foot-walking',
     costingOptions: {
       alley_factor: 5,
       driveway_factor: 4,
       walkway_factor: 0.8,
       walking_speed: 4.4,
+    },
+  },
+  {
+    id: 'stairs',
+    label: 'Stairs OK',
+    detail: 'Takes the most direct path including staircases.',
+    tags: ['Includes stairs', 'Shortest distance'],
+    orsProfile: 'foot-walking',
+    costingOptions: {
+      step_penalty: 0,
+      use_hills: 1,
+      walking_speed: 5.1,
     },
   },
 ]

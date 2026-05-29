@@ -10,7 +10,7 @@ The feature has a clear start state, a clear user action, and a visible result. 
 
 ## Test Steps
 
-1. Open `https://dubshijie.github.io/huskypath/`.
+1. Open the deployed HuskyPath site.
 2. Set `Current Location` to `Mary Gates Hall`.
 3. Set `To` to `Kane Hall`.
 4. Check that the main route title changes to `Mary Gates Hall to Kane Hall`.
